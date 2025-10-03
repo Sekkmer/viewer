@@ -12,14 +12,34 @@
 # Switches set here and in 00-Common.cmake must agree with
 # https://bitbucket.org/lindenlab/viewer-build-variables/src/tip/variables
 # Reading $LL_BUILD is an attempt to directly use those switches.
-if ("$ENV{LL_BUILD}" STREQUAL "" AND "${LL_BUILD_ENV}" STREQUAL "" )
+set(_LL_BUILD_FROM_ENV "$ENV{LL_BUILD}")
+if ("${_LL_BUILD_FROM_ENV}" STREQUAL "" AND "${LL_BUILD_ENV}" STREQUAL "")
   message(FATAL_ERROR "Environment variable LL_BUILD must be set")
-elseif("$ENV{LL_BUILD}" STREQUAL "")
-  set( ENV{LL_BUILD} "${LL_BUILD_ENV}" )
-  message( "Setting ENV{LL_BUILD} to cached variable ${LL_BUILD_ENV}" )
-else()
-  set( LL_BUILD_ENV "$ENV{LL_BUILD}" CACHE STRING "Save environment" FORCE )
-endif ()
+elseif("${_LL_BUILD_FROM_ENV}" STREQUAL "")
+  set(_LL_BUILD_FROM_ENV "${LL_BUILD_ENV}")
+  set(ENV{LL_BUILD} "${_LL_BUILD_FROM_ENV}")
+  message("Setting ENV{LL_BUILD} to cached variable ${LL_BUILD_ENV}")
+endif()
+
+option(LL_ENABLE_RELEASE_FOR_DOWNLOAD "Keep the LL_RELEASE_FOR_DOWNLOAD compile definition derived from LL_BUILD" ON)
+
+set(LL_BUILD_EFFECTIVE "${_LL_BUILD_FROM_ENV}")
+if(NOT LL_ENABLE_RELEASE_FOR_DOWNLOAD)
+  separate_arguments(_LL_BUILD_LIST UNIX_COMMAND "${LL_BUILD_EFFECTIVE}")
+  if(_LL_BUILD_LIST)
+    list(FILTER _LL_BUILD_LIST EXCLUDE REGEX "^-DLL_RELEASE_FOR_DOWNLOAD($|=.*)")
+    string(REPLACE ";" " " LL_BUILD_EFFECTIVE "${_LL_BUILD_LIST}")
+  else()
+    set(LL_BUILD_EFFECTIVE "")
+  endif()
+  string(STRIP "${LL_BUILD_EFFECTIVE}" LL_BUILD_EFFECTIVE)
+  set(ENV{LL_BUILD} "${LL_BUILD_EFFECTIVE}")
+endif()
+
+set(LL_BUILD_ENV "${LL_BUILD_EFFECTIVE}" CACHE STRING "Save environment" FORCE)
+unset(_LL_BUILD_FROM_ENV)
+unset(_LL_BUILD_LIST)
+
 include_guard()
 
 # Relative and absolute paths to subtrees.

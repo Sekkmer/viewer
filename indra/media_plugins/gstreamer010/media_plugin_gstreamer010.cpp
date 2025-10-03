@@ -798,10 +798,15 @@ MediaPluginGStreamer010::startup()
     // only do global GStreamer initialization once.
     if (!mDoneInit)
     {
+        // GLib threading is automatic since 2.32; avoid deprecated call.
+#if !GLIB_CHECK_VERSION(2,32,0)
         g_thread_init(NULL);
+#endif
 
-        // Init the glib type system - we need it.
+        // GLib type system auto-initializes since 2.36.
+#if !GLIB_CHECK_VERSION(2,36,0)
         g_type_init();
+#endif
 
         // Get symbols!
 #if LL_DARWIN

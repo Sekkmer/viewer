@@ -26,6 +26,7 @@
 
 #include "llwebrtc_impl.h"
 #include <algorithm>
+#include <atomic>
 #include <string.h>
 
 #include "api/audio_codecs/audio_decoder_factory.h"
@@ -353,37 +354,68 @@ void LLWebRTCImpl::init()
 
 void LLWebRTCImpl::terminate()
 {
-    mWorkerThread->BlockingCall(
-        [this]()
-        {
-            if (mDeviceModule)
-            {
-                mDeviceModule->ForceStopRecording();
-                mDeviceModule->StopPlayout();
-            }
-        });
+    if (mShuttingDown.exchange(true, std::memory_order_acq_rel))
+    {
+        return;
+    }
 
-    for (auto &connection : mPeerConnections)
+    if (mWorkerThread)
+    {
+        mWorkerThread->BlockingCall(
+            [this]()
+            {
+                if (mDeviceModule)
+                {
+                    mDeviceModule->ForceStopRecording();
+                    if (mDeviceModule->Playing())
+                    {
+                        mDeviceModule->StopPlayout();
+                    }
+                }
+            });
+    }
+
+    for (auto& connection : mPeerConnections)
     {
         connection->terminate();
     }
 
-    // connection->terminate() above spawns a number of Signaling thread calls to
-    // shut down the connection.  The following Blocking Call will wait
-    // until they're done before it's executed, allowing time to clean up.
+    if (mSignalingThread)
+    {
+        // connection->terminate() above spawns a number of Signaling thread calls to
+        // shut down the connection.  The following Blocking Call will wait
+        // until they're done before it's executed, allowing time to clean up.
+        mSignalingThread->BlockingCall([this]() { mPeerConnectionFactory = nullptr; });
+    }
+    else
+    {
+        mPeerConnectionFactory = nullptr;
+    }
 
-    mSignalingThread->BlockingCall([this]() { mPeerConnectionFactory = nullptr; });
-
-    mWorkerThread->BlockingCall(
-        [this]()
-        {
-            if (mDeviceModule)
+    if (mWorkerThread)
+    {
+        mWorkerThread->BlockingCall(
+            [this]()
             {
-                mDeviceModule->Terminate();
-            }
-            mDeviceModule     = nullptr;
-            mTaskQueueFactory = nullptr;
-        });
+                if (mDeviceModule)
+                {
+                    mDeviceModule->Terminate();
+                }
+                mDeviceModule          = nullptr;
+                mTaskQueueFactory      = nullptr;
+                mAudioProcessingModule = nullptr;
+            });
+    }
+    else
+    {
+        if (mDeviceModule)
+        {
+            mDeviceModule->Terminate();
+        }
+        mDeviceModule          = nullptr;
+        mTaskQueueFactory      = nullptr;
+        mAudioProcessingModule = nullptr;
+    }
 
     // In case peer connections still somehow have jobs in workers,
     // only clear connections up after clearing workers.
@@ -393,6 +425,26 @@ void LLWebRTCImpl::terminate()
 
     mPeerConnections.clear();
     webrtc::LogMessage::RemoveLogToStream(mLogSink);
+
+    if (mSignalingThread)
+    {
+        mSignalingThread->Stop();
+        mSignalingThread.reset();
+    }
+    if (mWorkerThread)
+    {
+        mWorkerThread->Stop();
+        mWorkerThread.reset();
+    }
+    if (mNetworkThread)
+    {
+        mNetworkThread->Stop();
+        mNetworkThread.reset();
+    }
+
+    mPeerCustomProcessor.reset();
+
+    webrtc::CleanupSSL();
 }
 
 void LLWebRTCImpl::setAudioConfig(LLWebRTCDeviceInterface::AudioConfig config)
@@ -440,6 +492,10 @@ void LLWebRTCImpl::setAudioConfig(LLWebRTCDeviceInterface::AudioConfig config)
 
 void LLWebRTCImpl::refreshDevices()
 {
+    if (mShuttingDown.load(std::memory_order_acquire) || !mWorkerThread)
+    {
+        return;
+    }
     mWorkerThread->PostTask([this]() { updateDevices(); });
 }
 
@@ -458,8 +514,9 @@ void LLWebRTCImpl::unsetDevicesObserver(LLWebRTCDevicesObserver *observer)
 // must be run in the worker thread.
 void LLWebRTCImpl::workerDeployDevices()
 {
-    if (!mDeviceModule)
+    if (mShuttingDown.load(std::memory_order_acquire) || !mDeviceModule)
     {
+        scheduleNextDeviceDeploy();
         return;
     }
 
@@ -484,8 +541,11 @@ void LLWebRTCImpl::workerDeployDevices()
         }
     }
 
-    mDeviceModule->StopPlayout();
     mDeviceModule->ForceStopRecording();
+    if (mDeviceModule->Playing())
+    {
+        mDeviceModule->StopPlayout();
+    }
 #if WEBRTC_WIN
     if (recordingDevice < 0)
     {
@@ -562,11 +622,17 @@ void LLWebRTCImpl::workerDeployDevices()
                 }
                 connection->enableReceiverTracks(!mTuningMode);
             }
-            if (1 < mDevicesDeploying.fetch_sub(1, std::memory_order_relaxed))
-            {
-                mWorkerThread->PostTask([this] { workerDeployDevices(); });
-            }
+            scheduleNextDeviceDeploy();
         });
+}
+
+void LLWebRTCImpl::scheduleNextDeviceDeploy()
+{
+    int pending = mDevicesDeploying.fetch_sub(1, std::memory_order_relaxed);
+    if (pending > 1 && mWorkerThread && !mShuttingDown.load(std::memory_order_acquire))
+    {
+        mWorkerThread->PostTask([this] { workerDeployDevices(); });
+    }
 }
 
 void LLWebRTCImpl::setCaptureDevice(const std::string &id)
@@ -641,6 +707,10 @@ void LLWebRTCImpl::OnDevicesUpdated()
 void LLWebRTCImpl::setTuningMode(bool enable)
 {
     mTuningMode = enable;
+    if (mShuttingDown.load(std::memory_order_acquire) || !mWorkerThread || !mSignalingThread)
+    {
+        return;
+    }
     mWorkerThread->PostTask(
         [this]
         {
@@ -666,12 +736,18 @@ void LLWebRTCImpl::setTuningMode(bool enable)
 
 void LLWebRTCImpl::deployDevices()
 {
+    if (mShuttingDown.load(std::memory_order_acquire) || !mWorkerThread)
+    {
+        return;
+    }
+
     if (0 < mDevicesDeploying.fetch_add(1, std::memory_order_relaxed))
     {
         return;
     }
     mWorkerThread->PostTask(
-        [this] {
+        [this]
+        {
             workerDeployDevices();
         });
 }

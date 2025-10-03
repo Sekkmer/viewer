@@ -1908,7 +1908,10 @@ void* LLWindowWin32::createSharedContext()
 void LLWindowWin32::makeContextCurrent(void* contextPtr)
 {
     wglMakeCurrent(mhDC, (HGLRC) contextPtr);
-    LL_PROFILER_GPU_CONTEXT;
+    if (gGLManager.mInited)
+    {
+        LL_PROFILER_GPU_CONTEXT;
+    }
 }
 
 void LLWindowWin32::destroySharedContext(void* contextPtr)

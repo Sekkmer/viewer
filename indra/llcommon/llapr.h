@@ -42,6 +42,7 @@
 #include "llstring.h"
 
 #include "mutex.h"
+#include <memory>
 
 struct apr_dso_handle_t;
 /**

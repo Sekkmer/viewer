@@ -94,6 +94,11 @@ endif (BUILD_HEADLESS)
 add_library (llrender ${llrender_SOURCE_FILES})
 target_include_directories( llrender  INTERFACE   ${CMAKE_CURRENT_SOURCE_DIR})
 
+if (LINUX)
+  # Ensure we pick up the Linux GL headers that define the legacy GL* types.
+  target_compile_definitions(llrender PUBLIC LL_MESA=1)
+endif()
+
 # Libraries on which this library depends, needed for Linux builds
 # Sort by high-level to low-level
 target_link_libraries(llrender
@@ -107,4 +112,3 @@ target_link_libraries(llrender
         OpenGL::GL
         OpenGL::GLU
         )
-

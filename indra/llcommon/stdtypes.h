@@ -28,6 +28,7 @@
 
 #include <cassert>
 #include <cfloat>
+#include <cstdint>
 #include <climits>
 #include <limits>
 #include <type_traits>
@@ -70,7 +71,7 @@ typedef unsigned __int64        U64;
 #define U64L(a)                 (a)
 #else
 typedef long long int           S64;
-typedef long long unsigned int      U64;
+typedef uint64_t                U64;
 #if LL_DARWIN || LL_LINUX
 #define S64L(a)             (a##LL)
 #define U64L(a)             (a##ULL)

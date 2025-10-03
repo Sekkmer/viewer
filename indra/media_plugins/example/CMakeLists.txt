@@ -24,6 +24,14 @@ add_library(media_plugin_example
 
 target_link_libraries(media_plugin_example media_plugin_base )
 
+# On Linux we must ensure legacy OpenGL GL* typedefs and enums are available
+# to code that includes llglheaders.h/llgl.h. Other targets (e.g. llrender)
+# already set this flag, but the standalone media plugins did not, which can
+# lead to compile errors like 'GLboolean has not been declared'.
+if (LINUX)
+  target_compile_definitions(media_plugin_example PUBLIC LL_MESA=1)
+endif()
+
 if (WINDOWS)
   set_target_properties(
     media_plugin_example

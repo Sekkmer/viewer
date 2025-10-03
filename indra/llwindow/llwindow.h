@@ -69,7 +69,7 @@ public:
     virtual bool maximize() = 0;
     virtual void minimize() = 0;
     virtual void restore() = 0;
-    bool getFullscreen()    { return mFullscreen; };
+    virtual bool getFullscreen() = 0;
     virtual bool getPosition(LLCoordScreen *position) = 0;
     virtual bool getSize(LLCoordScreen *size) = 0;
     virtual bool getSize(LLCoordWindow *size) = 0;
@@ -92,7 +92,7 @@ public:
 
     virtual bool setCursorPosition(LLCoordWindow position) = 0;
     virtual bool getCursorPosition(LLCoordWindow *position) = 0;
-#if LL_WINDOWS
+#if LL_WINDOWS && !LL_SDL_WINDOW
     virtual bool getCursorDelta(LLCoordCommon* delta) = 0;
 #endif
     virtual void showCursor() = 0;
@@ -170,11 +170,8 @@ public:
     // Returns true if valid color selected
     virtual bool dialogColorPicker(F32 *r, F32 *g, F32 *b);
 
-// return a platform-specific window reference (HWND on Windows, WindowRef on the Mac, Gtk window on Linux)
+// return a platform-specific window reference (HWND on Windows, (__unsafe_unretained) NSWindow on the Mac, Gtk window on Linux)
     virtual void *getPlatformWindow() = 0;
-
-// return the platform-specific window reference we use to initialize llmozlib (HWND on Windows, WindowRef on the Mac, Gtk window on Linux)
-    virtual void *getMediaWindow();
 
     // control platform's Language Text Input mechanisms.
     virtual void allowLanguageTextInput(LLPreeditor *preeditor, bool b) {}

@@ -2015,6 +2015,7 @@ target_link_libraries(${VIEWER_BINARY_NAME}
         ll::ndof
         ll::tracy
         ll::openxr
+        ll::uilibraries
         )
 
 if (USE_DISCORD)
@@ -2444,4 +2445,3 @@ if (LL_TESTS)
 endif (LL_TESTS)
 
 check_message_template(${VIEWER_BINARY_NAME})
-

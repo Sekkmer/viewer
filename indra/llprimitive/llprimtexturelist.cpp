@@ -137,12 +137,10 @@ S32 LLPrimTextureList::copyTexture(const U8 index, const LLTextureEntry& te)
         // we're changing an existing entry
     llassert(mEntryList[index]);
     delete (mEntryList[index]);
-    if  (&te)
+    mEntryList[index] = te.newCopy();
+    if (!mEntryList[index])
     {
-        mEntryList[index] = te.newCopy();
-    }
-    else
-    {
+        // Fall back to a default entry if allocation failed for some reason.
         mEntryList[index] = LLPrimTextureList::newTextureEntry();
     }
     return TEM_CHANGE_TEXTURE;
@@ -441,5 +439,4 @@ void LLPrimTextureList::setAllIDs(const LLUUID& id)
         ++itr;
     }
 }
-
 

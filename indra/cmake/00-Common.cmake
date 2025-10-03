@@ -16,8 +16,9 @@ include_guard()
 
 include(Variables)
 
-# We go to some trouble to set LL_BUILD to the set of relevant compiler flags.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} $ENV{LL_BUILD}")
+# We go to some trouble in Variables.cmake to capture LL_BUILD (and optionally
+# sanitize it); consume the cached value here.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LL_BUILD_ENV}")
 # Given that, all the flags you see added below are flags NOT present in
 # https://bitbucket.org/lindenlab/viewer-build-variables/src/tip/variables.
 # Before adding new ones here, it's important to ask: can this flag really be

@@ -64,6 +64,30 @@ class ViewerManifest(LLManifest):
         super(ViewerManifest, self).construct()
         self.path(src="../../scripts/messages/message_template.msg", dst="app_settings/message_template.msg")
 
+        # Always stage essential app_settings for local runs (copy action)
+        # Include shaders so running from the build tree works (fixes missing GLSL files).
+        with self.prefix(src_dst="app_settings"):
+            self.exclude("logcontrol.xml")
+            self.exclude("logcontrol-dev.xml")
+            self.path("*.ini")
+            self.path("*.xml")
+            self.path("shaders")
+
+        # Copy core avatar/character definitions for local runs so login/world
+        # init can read avatar_lad.xml and friends. Without these the viewer
+        # will crash during LLAvatarAppearance::initClass.
+        with self.prefix(src_dst="character"):
+            self.path("*.llm")
+            self.path("*.xml")
+            self.path("*.tga")
+
+        # Lightweight skin UI XMLs so panels don't create dummy widgets when
+        # running from the build tree. Keep textures out here to minimize copy time.
+        with self.prefix(src_dst="skins"):
+            self.path("*/xui/*/*.xml")
+            self.path("*/xui/*/widgets/*.xml")
+            self.path("*/*.xml")
+
         if self.is_packaging_viewer():
             with self.prefix(src_dst="app_settings"):
                 self.exclude("logcontrol.xml")
@@ -1124,11 +1148,12 @@ class LinuxManifest(ViewerManifest):
 
         with self.prefix(dst="bin"):
             self.path("secondlife-bin","do-not-directly-run-secondlife-bin")
-            self.path("../linux_crash_logger/linux-crash-logger","linux-crash-logger.bin")
+            # Crash logger and component manager are optional in some builds
+            self.path_optional("../linux_crash_logger/linux-crash-logger","linux-crash-logger.bin")
             self.path2basename("../llplugin/slplugin", "SLPlugin")
-            #this copies over the python wrapper script, associated utilities and required libraries, see SL-321, SL-322 and SL-323
+            # this copies over the python wrapper script, associated utilities and required libraries, see SL-321, SL-322 and SL-323
             with self.prefix(src="../viewer_components/manager", dst=""):
-                self.path("*.py")
+                self.path_optional("*.py")
 
         # recurses, packaged again
         self.path("res-sdl")
@@ -1143,19 +1168,33 @@ class LinuxManifest(ViewerManifest):
 
         # plugins
         with self.prefix(src="../media_plugins", dst="bin/llplugin"):
-            self.path("gstreamer010/libmedia_plugin_gstreamer010.so",
-                      "libmedia_plugin_gstreamer.so")
-            self.path2basename("libvlc", "libmedia_plugin_libvlc.so")
+            # Treat media plugins as optional depending on what was built
+            self.path_optional("gstreamer010/libmedia_plugin_gstreamer010.so",
+                               "libmedia_plugin_gstreamer.so")
+            # libvlc media plugin
+            self.path_optional("libvlc/libmedia_plugin_libvlc.so",
+                               "libmedia_plugin_libvlc.so")
 
         with self.prefix(src=os.path.join(pkgdir, 'lib', 'vlc', 'plugins'), dst="bin/llplugin/vlc/plugins"):
-            self.path( "plugins.dat" )
-            self.path( "*/*.so" )
+            self.path_optional("plugins.dat")
+            self.path_optional("*/*.so")
 
         with self.prefix(src=os.path.join(pkgdir, 'lib' ), dst="lib"):
-            self.path( "libvlc*.so*" )
+            self.path_optional("libvlc*.so*")
 
-        # llcommon
-        if not self.path("../llcommon/libllcommon.so", "lib/libllcommon.so"):
+        # llwebrtc runtime library (provides WebRTC voice and data channel)
+        # Built in the top-level build tree at ../llwebrtc/libllwebrtc.so
+        with self.prefix(src=os.path.join(self.args['build'], os.pardir, 'llwebrtc'), dst="lib"):
+            self.path_optional("libllwebrtc.so")
+
+        # Audio runtimes from prebuilt release libs (optional)
+        with self.prefix(src=relpkgdir, dst="lib"):
+            self.path_optional("libalut.so*")
+            self.path_optional("libopenal.so*")
+            self.path_optional("libsndfile.so*")
+
+        # llcommon (optional: some builds link it statically)
+        if not self.path_optional("../llcommon/libllcommon.so", "lib/libllcommon.so"):
             print("Skipping llcommon.so (assuming llcommon was linked statically)")
 
         self.path("featuretable_linux.txt")
@@ -1163,6 +1202,8 @@ class LinuxManifest(ViewerManifest):
 
         with self.prefix(src=pkgdir):
             self.path("ca-bundle.crt")
+            # Install CA bundle in bin/ for components that look there
+            self.path("ca-bundle.crt", "bin/ca-bundle.crt")
 
     def package_finish(self):
         installer_name = self.installer_base_name()

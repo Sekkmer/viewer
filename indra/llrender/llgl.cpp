@@ -239,10 +239,10 @@ PFNWGLGETSWAPINTERVALEXTPROC wglGetSwapIntervalEXT = nullptr;
 #endif
 
 // GL_VERSION_1_2
-//PFNGLDRAWRANGEELEMENTSPROC  glDrawRangeElements = nullptr;
-//PFNGLTEXIMAGE3DPROC         glTexImage3D = nullptr;
-//PFNGLTEXSUBIMAGE3DPROC      glTexSubImage3D = nullptr;
-//PFNGLCOPYTEXSUBIMAGE3DPROC  glCopyTexSubImage3D = nullptr;
+PFNGLDRAWRANGEELEMENTSPROC  glDrawRangeElements = nullptr;
+PFNGLTEXIMAGE3DPROC         glTexImage3D = nullptr;
+PFNGLTEXSUBIMAGE3DPROC      glTexSubImage3D = nullptr;
+PFNGLCOPYTEXSUBIMAGE3DPROC  glCopyTexSubImage3D = nullptr;
 
 // GL_VERSION_1_3
 PFNGLACTIVETEXTUREPROC               glActiveTexture = nullptr;
@@ -2941,5 +2941,4 @@ extern "C"
     __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
 #endif
-
 

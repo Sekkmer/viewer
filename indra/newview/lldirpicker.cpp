@@ -210,64 +210,121 @@ std::string LLDirPicker::getDirName()
 
 #elif LL_LINUX
 
+# if LL_PORTAL
+
+#include <libportal/portal.h>
+#include <gio/gio.h>
+
 LLDirPicker::LLDirPicker() :
     mFileName(NULL),
     mLocked(false)
 {
-    mFilePicker = new LLFilePicker();
     reset();
 }
 
 LLDirPicker::~LLDirPicker()
 {
-    delete mFilePicker;
 }
-
 
 void LLDirPicker::reset()
 {
-    if (mFilePicker)
-        mFilePicker->reset();
+    mDir.clear();
 }
 
 bool LLDirPicker::getDir(std::string* filename, bool blocking)
 {
     reset();
 
-    // if local file browsing is turned off, return without opening dialog
     if (!check_local_file_access_enabled())
     {
         return false;
     }
 
-#if !LL_MESA_HEADLESS
-
-    if (mFilePicker)
+    if (blocking)
     {
-        GtkWindow* picker = mFilePicker->buildFilePicker(false, true,
-                                 "dirpicker");
-
-        if (picker)
-        {
-           gtk_window_set_title(GTK_WINDOW(picker), LLTrans::getString("choose_the_directory").c_str());
-           gtk_widget_show_all(GTK_WIDGET(picker));
-           gtk_main();
-           return (!mFilePicker->getFirstFile().empty());
-        }
+        gViewerWindow->getWindow()->beforeDialog();
+        send_agent_pause();
     }
-#endif // !LL_MESA_HEADLESS
 
-    return false;
+    bool success = false;
+
+    XdpPortal* portal = xdp_portal_new();
+    GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
+    struct Ctx { GMainLoop* loop; LLDirPicker* self; bool* ok; } ctx { loop, this, &success };
+
+    auto cb = [](GObject* source, GAsyncResult* res, gpointer user_data){
+        Ctx* c = static_cast<Ctx*>(user_data);
+        g_autoptr(GError) error = nullptr;
+        g_autoptr(GVariant) result = xdp_portal_open_file_finish(XDP_PORTAL(source), res, &error);
+        if (result)
+        {
+            GVariant* uris = g_variant_lookup_value(result, "uris", G_VARIANT_TYPE("as"));
+            if (uris && g_variant_n_children(uris) > 0)
+            {
+                GVariant* child = g_variant_get_child_value(uris, 0);
+                const char* s = g_variant_get_string(child, nullptr);
+                if (s)
+                {
+                    g_autofree char* path = g_filename_from_uri(s, nullptr, nullptr);
+                    if (path)
+                    {
+                        if (g_file_test(path, G_FILE_TEST_IS_DIR))
+                        {
+                            c->self->mDir.assign(path);
+                        }
+                        else
+                        {
+                            g_autofree char* dirname = g_path_get_dirname(path);
+                            if (dirname)
+                            {
+                                c->self->mDir.assign(dirname);
+                            }
+                        }
+                        *(c->ok) = !c->self->mDir.empty();
+                    }
+                }
+                g_variant_unref(child);
+            }
+            if (uris) g_variant_unref(uris);
+        }
+        g_main_loop_quit(c->loop);
+    };
+
+    const std::string title = LLTrans::getString("choose_the_directory");
+
+    xdp_portal_open_file(portal,
+                         /*parent*/ nullptr,
+                         /*title*/  title.c_str(),
+                         /*filters*/ nullptr,
+                         /*current_filter*/ nullptr,
+                         /*choices*/ nullptr,
+                         /*flags*/   XDP_OPEN_FILE_FLAG_NONE,
+                         /*cancellable*/ nullptr,
+                         /*callback*/ cb,
+                         /*data*/     &ctx);
+
+    g_main_loop_run(loop);
+    g_main_loop_unref(loop);
+    g_object_unref(portal);
+
+    if (blocking)
+    {
+        send_agent_resume();
+        gViewerWindow->getWindow()->afterDialog();
+        LLFrameTimer::updateFrameTime();
+    }
+
+    return success;
 }
 
 std::string LLDirPicker::getDirName()
 {
-    if (mFilePicker)
-    {
-        return mFilePicker->getFirstFile();
-    }
-    return "";
+    return mDir;
 }
+
+# else // LL_PORTAL
+#  error "Linux build expects LL_PORTAL=1 for directory dialog implementation"
+# endif // LL_PORTAL
 
 #else // not implemented
 

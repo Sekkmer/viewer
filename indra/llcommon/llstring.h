@@ -32,6 +32,7 @@
 #include <string>
 #include <string_view>
 #include <cstdio>
+#include <memory>
 #include <cwchar>                   // std::wcslen()
 //#include <locale>
 #include <iomanip>

@@ -49,6 +49,8 @@
                                 // the webrtc headers, which msvc doesn't recognize.
 #endif // WEBRTC_WIN
 
+#include <atomic>
+
 #include "api/scoped_refptr.h"
 #include "rtc_base/ref_count.h"
 #include "rtc_base/ref_counted_object.h"
@@ -517,12 +519,15 @@ class LLWebRTCImpl : public LLWebRTCDeviceInterface, public webrtc::AudioDeviceO
   protected:
 
     void workerDeployDevices();
+    void scheduleNextDeviceDeploy();
     LLWebRTCLogSink*                                           mLogSink;
 
     // The native webrtc threads
     std::unique_ptr<webrtc::Thread>                            mNetworkThread;
     std::unique_ptr<webrtc::Thread>                            mWorkerThread;
     std::unique_ptr<webrtc::Thread>                            mSignalingThread;
+
+    std::atomic<bool>                                          mShuttingDown{ false };
 
     // The factory that allows creation of native webrtc PeerConnections.
     webrtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> mPeerConnectionFactory;

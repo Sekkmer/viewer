@@ -32,7 +32,12 @@ if( USE_CONAN )
     add_compile_definitions(LL_USESYSTEMLIBS USE_CONAN NO_AUTOBUILD_3P)
 else()
   set( USE_CONAN OFF )
-  set( USE_AUTOBUILD_3P ON )
+  if( NOT DEFINED USE_AUTOBUILD_3P )
+    set( USE_AUTOBUILD_3P ON )
+  endif()
+  if( NOT USE_AUTOBUILD_3P )
+    add_compile_definitions(LL_USESYSTEMLIBS NO_AUTOBUILD_3P)
+  endif()
 endif()
 
 if (NOT DEFINED CMAKE_CXX_STANDARD)
@@ -146,4 +151,3 @@ if (LL_TESTS)
   # individual apps can add themselves as dependencies
   add_subdirectory(${INTEGRATION_TESTS_PREFIX}integration_tests)
 endif (LL_TESTS)
-

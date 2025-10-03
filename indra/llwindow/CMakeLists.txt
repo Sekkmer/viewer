@@ -12,12 +12,14 @@ project(llwindow)
 
 include(00-Common)
 include(DragDrop)
+include(Linking)
 include(LLCommon)
 include(LLImage)
 include(LLWindow)
 include(UI)
 include(ViewerMiscLibs)
 include(GLM)
+include(SDL3)
 
 set(llwindow_SOURCE_FILES
     llcursortypes.cpp
@@ -58,34 +60,30 @@ set(llwindow_LINK_LIBRARIES
         ll::glm
         ll::glext
         ll::uilibraries
-        ll::SDL
         )
-# Libraries on which this library depends, needed for Linux builds
-# Sort by high-level to low-level
-if (LINUX)
+
+if (USE_SDL_WINDOW)
   list(APPEND viewer_SOURCE_FILES
+       llsdl.cpp
        llkeyboardsdl.cpp
        llwindowsdl.cpp
        )
   list(APPEND viewer_HEADER_FILES
+       llsdl.h
        llkeyboardsdl.h
        llwindowsdl.h
        )
 
-  if (BUILD_HEADLESS)
-    set(llwindowheadless_LINK_LIBRARIES
-        ${LLCOMMON_LIBRARIES}
-        ${LLIMAGE_LIBRARIES}
-        ${LLMATH_LIBRARIES}
-        ${LLRENDER_HEADLESS_LIBRARIES}
-        ${LLFILESYSTEM_LIBRARIES}
-        ${LLWINDOW_HEADLESS_LIBRARIES}
-        ${LLXML_LIBRARIES}
-        fontconfig          # For FCInit and other FC* functions.
-        )
-  endif (BUILD_HEADLESS)
+  list(APPEND llwindow_LINK_LIBRARIES
+       ll::SDL3
+       )
+endif ()
 
-endif (LINUX)
+if (LINUX)
+  list(APPEND llwindow_LINK_LIBRARIES
+       ll::fontconfig
+       )
+endif ()
 
 if (DARWIN)
   list(APPEND llwindow_SOURCE_FILES
@@ -109,56 +107,88 @@ if (DARWIN)
       PROPERTIES
       COMPILE_FLAGS "-fpascal-strings"
       )
-endif (DARWIN)
 
+  set_source_files_properties(
+    llwindowmacosx-objc.mm
+    llopenglview-objc.mm
+    PROPERTIES
+    SKIP_PRECOMPILE_HEADERS TRUE
+  )
+endif (DARWIN)
 
 if (WINDOWS)
   list(APPEND llwindow_SOURCE_FILES
-       llwindowwin32.cpp
        lldxhardware.cpp
-       llkeyboardwin32.cpp
-       lldragdropwin32.cpp
        )
   list(APPEND llwindow_HEADER_FILES
-       llwindowwin32.h
        lldxhardware.h
-       llkeyboardwin32.h
-       lldragdropwin32.h
        )
   list(APPEND llwindow_LINK_LIBRARIES
+       wbemuuid
        comdlg32     # Common Dialogs for ChooseColor
        ole32
        dxgi
        d3d9
        )
-endif (WINDOWS)
+endif ()
 
-if (SOLARIS)
+if (WINDOWS AND NOT USE_SDL_WINDOW)
   list(APPEND llwindow_SOURCE_FILES
-       llwindowsolaris.cpp
+       llwindowwin32.cpp
+       llkeyboardwin32.cpp
+       lldragdropwin32.cpp
        )
   list(APPEND llwindow_HEADER_FILES
-       llwindowsolaris.h
+       llwindowwin32.h
+       llkeyboardwin32.h
+       lldragdropwin32.h
        )
-endif (SOLARIS)
+endif ()
 
 if (BUILD_HEADLESS)
   set(llwindowheadless_SOURCE_FILES
-       llwindowmesaheadless.cpp
-       llmousehandler.cpp
-       )
+      llcursortypes.cpp
+      llkeyboard.cpp
+      llkeyboardheadless.cpp
+      llwindowheadless.cpp
+      llwindowcallbacks.cpp
+      llwindow.cpp
+      llwindowmesaheadless.cpp
+      llmousehandler.cpp
+      )
+
   set(llwindowheadless_HEADER_FILES
-       llwindowmesaheadless.h
-       llmousehandler.h
-    )
+      llcursortypes.h
+      llkeyboard.h
+      llkeyboardheadless.h
+      llwindowheadless.h
+      llwindowcallbacks.h
+      llwindowmesaheadless.h
+      llmousehandler.h
+      )
+
   add_library (llwindowheadless
-    ${llwindow_SOURCE_FILES}
     ${llwindowheadless_SOURCE_FILES}
+    ${llwindowheadless_HEADER_FILES}
     )
-  set_property(TARGET llwindowheadless
-    PROPERTY COMPILE_DEFINITIONS LL_MESA=1 LL_MESA_HEADLESS=1
-    )
-  target_link_libraries (llwindowheadless ${llwindowheadless_LINK_LIBRARIES} dl)
+
+  target_compile_definitions( llwindowheadless PUBLIC LL_MESA=1 LL_MESA_HEADLESS=1 )
+
+  target_link_libraries (llwindowheadless
+  llcommon
+  llimage
+  llmath
+  llrenderheadless
+  llfilesystem
+  llxml
+  ll::glm
+  ll::glext
+  ll::zlib-ng
+  PkgConfig::OSMESA
+  ll::fontconfig
+  dl
+  )
+  target_include_directories(llwindowheadless INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 endif (BUILD_HEADLESS)
 
 if (llwindow_HEADER_FILES)
@@ -172,14 +202,13 @@ endif (llwindow_HEADER_FILES)
     ${viewer_SOURCE_FILES}
     )
 
-if (SDL_FOUND)
-  set_property(TARGET llwindow
-    PROPERTY COMPILE_DEFINITIONS LL_SDL=1
-    )
-endif (SDL_FOUND)
+target_link_libraries (llwindow ${llwindow_LINK_LIBRARIES})
+target_include_directories(llwindow INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
-  target_link_libraries (llwindow ${llwindow_LINK_LIBRARIES})
-  target_include_directories(llwindow INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+if (USE_SDL_WINDOW)
+  target_compile_definitions( llwindow PUBLIC LL_SDL_WINDOW=1 )
+endif()
+
 
 if (DARWIN)
   target_link_libraries(llwindow ${CARBON_LIBRARY})
