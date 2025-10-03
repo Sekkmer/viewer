@@ -125,6 +125,7 @@ public:
 private:
     //implementation of above, wrapped for easy error handling
     eFBOStatus doAllocateScreenBuffer(U32 resX, U32 resY);
+    void applyCommonOITUniforms(LLGLSLShader& shader);
 public:
 
     //attempt to allocate screen buffers at resX, resY
@@ -789,6 +790,8 @@ public:
 
     //texture for making the glow
     LLRenderTarget              mGlow[3];
+    LLRenderTarget              mOITBuffer;
+    bool                        mOITDepthShared = false;
 
     //noise map
     U32                 mNoiseMap;
@@ -1001,6 +1004,10 @@ public:
     //
     static LLRender::eTexIndex sRenderHighlightTextureChannel;
 
+    // OIT render mode for alpha pools: 0 = none, 1 = accum/combined, 2 = reveal (fallback)
+    static U32  sOITPass;
+    static bool sOITUseMRT;
+
     //debug use
     static U32              sCurRenderPoolType ;
 
@@ -1087,6 +1094,11 @@ public:
     static bool RenderMirrors;
     static S32 RenderHeroProbeUpdateRate;
     static S32 RenderHeroProbeConservativeUpdateMultiplier;
+    static bool RenderUsePremultAlpha;
+    static bool RenderOITWeighted;
+    static bool RenderOITRiggedOnly;
+    static bool sRenderRiggedAlpha;
+    static bool sRenderNonRiggedAlpha;
 };
 
 void render_bbox(const LLVector3 &min, const LLVector3 &max);

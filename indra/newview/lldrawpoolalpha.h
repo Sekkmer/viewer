@@ -67,6 +67,8 @@ public:
     void renderAlpha(U32 mask, bool depth_only = false, bool rigged = false);
     void renderAlphaHighlight();
 
+    void flushDeferredEmissives();
+
     static bool sShowDebugAlpha;
 
 private:
@@ -86,6 +88,10 @@ private:
     void renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissives);
     bool TexSetup(LLDrawInfo* draw, bool use_material);
     void RestoreTexSetup(bool tex_setup);
+    void enqueueDeferredEmissives(const std::vector<LLDrawInfo*>& emissives,
+                                  const std::vector<LLDrawInfo*>& rigged_emissives,
+                                  const std::vector<LLDrawInfo*>& pbr_emissives,
+                                  const std::vector<LLDrawInfo*>& pbr_rigged_emissives);
 
     // our 'normal' alpha blend function for this pass
     LLRender::eBlendFactor mColorSFactor;
@@ -93,8 +99,13 @@ private:
     LLRender::eBlendFactor mAlphaSFactor;
     LLRender::eBlendFactor mAlphaDFactor;
 
-    // if true, we're executing a rigged render pass
     bool mRigged = false;
+    bool mUsePremultBlend = false;
+
+    std::vector<LLDrawInfo*> mDeferredEmissives;
+    std::vector<LLDrawInfo*> mDeferredRiggedEmissives;
+    std::vector<LLDrawInfo*> mDeferredPbrEmissives;
+    std::vector<LLDrawInfo*> mDeferredPbrRiggedEmissives;
 };
 
 #endif // LL_LLDRAWPOOLALPHA_H
